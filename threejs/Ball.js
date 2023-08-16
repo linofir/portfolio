@@ -10,44 +10,59 @@ class Ball{
     constructor(game, x, z, id=0){
         this.id = id;
         this.game = game;
-        this.world = this.game.world;
-
-        this.position.x = x;
-        this.position.z = z;
+        this.world = game.world;
 
         this.startPosition = new THREE.Vector3(x, Ball.RADIUS, z);
 
+        this.sphere = this.createBody(x, Ball.RADIUS, z)
+        this.world.addBody(this.sphere);
         
-
-        this.sphere = this.createBody(x, BallRadius, z)
-        this.world.addShape(sphereBody);
-        
-        const color = (id==0) ? 0xFFFFFF : 0xFF0000;
-        this.mesh = this.game.helper.addVisual(this.sphere, color)
+        const colors =[0xFFFFFF, 0x99e6ee, 0xff8484, 0xb21212, 0xb26abf
+            , 0xf4d2b2, 0xbce5af, 0x000000, 0xd89a00, 0x00606a, 0xb21212, 0x5f2969, 0xdc6900, 0x009a37, 0x634303
+        ]
+        //const color = (id==0) ? 0xFFFFFF : 0xFF0000;
+        this.mesh = this.game.helper.addVisual(this.sphere, colors[id]);
 
         this.name = `Ball${id}`;
 
-        this.foward = new THREE.Vector3(0,0,-1);
+        this.forward = new THREE.Vector3(0,0,-1);
         this.up = new THREE.Vector3(0,1,0);
-        this.tempVec = new THREE.Vector3();
-        this.tempQuat = new THREE.Vector3();
+        this.tmpVec = new THREE.Vector3();
+        this.tmpQuat = new THREE.Quaternion();
 
     }
 
-    hit(){
+    hit(strength =0.6){
+        this.sphere.wakeUp();
+      
+        const theta = this.game.controls.getAzimuthalAngle();
+        this.tmpQuat.setFromAxisAngle(this.up, theta);
+
+        const forward = this.forward.clone().applyQuaternion(this.tmpQuat);
+    
+        const force = new CANNON.Vec3();
+        force.copy(forward);
+        force.scale(strength, force);
+      
+        this.sphere.applyImpulse(force, new CANNON.Vec3());
             
     }
 
-    createBody(x, radius, z){
+    createBody(x, y, z){
 
         const shape = new CANNON.Sphere(Ball.RADIUS);
-        const sphereBody = new Body({
+        const sphereBody = new CANNON.Body({
             mass: Ball.MASS,
+            position: new THREE.Vector3(x,y,z),
             material: Ball.MATERIAL,
-            shape
+            shape: shape
         })
-        sphereBody.position.x = x;
-        sphereBody.position.z = z;
+        sphereBody.linearDamping = sphereBody.angularDamping = 0.5;
+        sphereBody.allowSleep = true;
+
+        sphereBody.sleepSpeedLimit = 2;
+        sphereBody.sleepTimeLimit = 0.1;
+
         return sphereBody
     }
 }
