@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { OrbitControls } from "../node_modules/three/examples/jsm/controls/OrbitControls.js";
 import { CannonHelper } from "../libs/CannonHelper.js";
+import { RGBELoader } from "../node_modules/three/examples/jsm/loaders/RGBELoader.js";
+import { GLTFLoader } from "../node_modules/three/examples/jsm/loaders/GLTFLoader.js";
+import { OrbitControls } from "../node_modules/three/examples/jsm/controls/OrbitControls.js";
+import {LoadingBar} from "../libs/LoadingBar.js";
 import { Table } from "./Table.js";
 import { Ball } from "./Ball.js";
 
@@ -9,9 +12,12 @@ import { Ball } from "./Ball.js";
 class Game{
 
   constructor(){
+    this.debug = false;
     this.initThree();
     this.initWorld();
     this.initScene();
+    
+    this.loadingBar = new LoadingBar();
   }
  
   initThree(){
@@ -31,20 +37,9 @@ class Game{
      const ambient = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 0.3);
      this.scene.add(ambient);
      
-     const light = new THREE.DirectionalLight();
-     light.position.set( 0.2, 1, 0);
-     light.castShadow = true;
-     light.shadow.mapSize.width = 1024;
-     light.shadow.mapSize.height = 512;
-     const size = 10;
-     light.shadow.camera.top = 1;
-     light.shadow.camera.right = 2;
-     light.shadow.camera.bottom = -1;
-     light.shadow.camera.left = -2;
-     light.shadow.camera.near = 0.2;
-     light.shadow.camera.far = 4;
-     this.scene.add(light);
-   
+     this.createLight(Table.LENGTH/4);
+     this.createLight(-Table.LENGTH/4);
+     
      this.renderer = new THREE.WebGLRenderer({ antialias: true } );
      this.renderer.shadowMap.enabled = true;
      this.renderer.setPixelRatio( window.devicePixelRatio );
@@ -57,6 +52,47 @@ class Game{
  
      window.addEventListener('resize', this.resize.bind(this) );
     }
+    
+  createLight(x){
+    const light = new THREE.SpotLight(0xffffe5, 2.5, 10, 0.8, 0.5, 2);
+
+    light.position.set( x, 1, 0);
+    light.target.position.set(x,0x0);
+    light.updateMatrixWorld();
+
+    light.castShadow = true;
+    light.shadow.mapSize.width = 2048;
+    light.shadow.mapSize.height = 2048;
+
+    light.shadow.camera.fov = 70
+    light.shadow.camera.near = 1;
+    light.shadow.camera.far = 2.5;
+    
+    this.scene.add(light);
+
+    if(this.debug){
+      const SpotLightHelper = new THREE.SpotLightHelper(light);
+      //this.scene.add(SpotLightHelper);
+    }
+  }
+    
+  setEnvironment(){
+    const loader = new RGBELoader();
+    const pmremGenerator = new THREE.PMREMGenerator( this.renderer );
+    pmremGenerator.compileEquirectangularShader();
+        
+    loader.load( '../assets/living_room.hdr',  
+        texture => {
+            const envMap = pmremGenerator.fromEquirectangular( texture).texture;
+            pmremGenerator.dispose();
+            this.scene.environment = envMap;
+        }, 
+        undefined, 
+        err => console.error( err )
+      );
+
+  }
+    
     
   initWorld() {
     this.world = new CANNON.World();
@@ -71,7 +107,7 @@ class Game{
     
     this.helper = new CannonHelper( this.scene, this.world);
   }
-  
+
   setCollisionBehaviour(world){
     world.defaultContactMaterial.friction = 0.2;
     world.defaultContactMaterial.restitution = 0.8;
@@ -88,7 +124,48 @@ class Game{
   initScene(){
     this.helper = new CannonHelper(this.scene, this.world);
     this.table = new Table(this);
+    this.loadGLTF();
     this.createBalls();
+  }
+
+  loadGLTF(){
+    const loader =  new GLTFLoader().setPath("../assets/pool-table/");
+
+    loader.load('poo-table.glb',
+
+    gltf => {
+      this.table = gltf.scene
+      this.table.position.set(-Table.LENGTH/2, 0, Table.WIDTH/2 );
+      this.table.traverse( child => {
+        if(shoçd.name == 'Cue'){
+          this.cue = child;
+          child.visible = false
+        }
+        if(child.name = 'Felt'){
+          this.edges = child;
+        }
+        if(child.isMesh){
+          child.material.metalness = 0.0;
+          child.material.roughness = 0.3;
+        }
+        if(child.oarent !== null && child.parent.name !== null && child.parent.name == 'Felt'){
+          child.material.roughness = 0.8;
+          child.recieveShadow = true
+        }
+      })
+      rhis.scene.add(gltf.scene);
+
+      this.loadingBar.visible = false;
+
+      this.renderer.setAnimationLoop(this.render.bind(this))
+    },
+    xhr => {
+      this.loadingBar.progress = (xhr.loaded / xhr.total);
+    },
+    err => {
+      console.error(err);
+    }
+    );
   }
 
   createBalls(){
@@ -116,18 +193,19 @@ class Game{
     this.cueBall = this.balls[0];
   }
 
- 
   resize(){
-     this.camera.aspect = window.innerWidth / window.innerHeight;
-     this.camera.updateProjectionMatrix();
-     this.renderer.setSize( window.innerWidth, window.innerHeight );  
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize( window.innerWidth, window.innerHeight );  
   }
  
   render( ) {   
-    this.controls.target.copy(this.cueBall.mesh.position);
+    this.controls.target.copy(this.balls[0].mesh.position);
     this.controls.update(); 
     this.world.step(this.world.fixedTimeStep);
-    this.helper.update();
+
+    if(this.helper) this.helper.update();
+    this.balls.forEach(ball => ball.update());
     this.renderer.render( this.scene, this.camera );
   }
  }
