@@ -17,11 +17,7 @@ class Ball{
         this.sphere = this.createBody(x, Ball.RADIUS, z)
         this.world.addBody(this.sphere);
         
-        const colors =[0xFFFFFF, 0x99e6ee, 0xff8484, 0xb21212, 0xb26abf
-            , 0xf4d2b2, 0xbce5af, 0x000000, 0xd89a00, 0x00606a, 0xb21212, 0x5f2969, 0xdc6900, 0x009a37, 0x634303
-        ]
-        //const color = (id==0) ? 0xFFFFFF : 0xFF0000;
-        this.mesh = this.game.helper.addVisual(this.sphere, colors[id]);
+        this.mesh = this.createMesh(this.game.scene);
 
         this.name = `Ball${id}`;
 
@@ -29,6 +25,19 @@ class Ball{
         this.up = new THREE.Vector3(0,1,0);
         this.tmpVec = new THREE.Vector3();
         this.tmpQuat = new THREE.Quaternion();
+
+        this.fallen = false;
+
+        this.reset();
+    }
+
+    reset(){
+        //this.rigidBody.velocity = new CANNON.Vec3(0);
+        //this.rigidBody.angularVelocity = new CANNON.Vec3(0);
+        this.sphere.position.copy( this.startPosition );
+        this.mesh.position.copy( this.startPosition );
+        this.mesh.rotation.set(0,0,0);
+        this.fallen = false;
 
     }
 
@@ -45,11 +54,9 @@ class Ball{
         force.scale(strength, force);
       
         this.sphere.applyImpulse(force, new CANNON.Vec3());
-            
     }
 
     createBody(x, y, z){
-
         const shape = new CANNON.Sphere(Ball.RADIUS);
         const sphereBody = new CANNON.Body({
             mass: Ball.MASS,
@@ -64,6 +71,37 @@ class Ball{
         sphereBody.sleepTimeLimit = 0.1;
 
         return sphereBody
+    }
+
+    createMesh(scene){
+        const geometry = new THREE.SphereBufferGeometry(Ball.RADIUS, 16, 16);
+        const material = new THREE.MeshStandardMaterial({
+            metalness: 0.0,
+            roughness: 0.1,
+            envMap: scene.environment
+        })
+
+        if(this.id > 0){
+            const textureLoader = new THREE.TextureLoader().setPath("../assets/pool-table/").load(`${this.id}ball.png`, tex => {
+                material.map = tex;
+                material.needsUpdate = true;
+            })
+        }
+
+        const mesh = new THREE.Mesh(geometry, material);
+
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        scene.add(mesh);
+
+        return mesh;
+    };
+
+    update(){
+        this.mesh.position.copy(this.sphere.position);
+        this.mesh.quaternion.copy(this.sphere.quaternion);
+
     }
 }
 

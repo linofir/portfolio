@@ -7,24 +7,42 @@ import { OrbitControls } from "../node_modules/three/examples/jsm/controls/Orbit
 import {LoadingBar} from "../libs/LoadingBar.js";
 import { Table } from "./Table.js";
 import { Ball } from "./Ball.js";
+import { WhiteBall } from "./WhiteBall.js"
+import {StrengthBar} from "./StrengthBar.js"
 
 
 class Game{
 
   constructor(){
-    this.debug = false;
     this.initThree();
     this.initWorld();
     this.initScene();
-    
-    this.loadingBar = new LoadingBar();
-  }
- 
-  initThree(){
-     const container = document.createElement( 'div' );
-     document.body.appendChild( container );
 
-     this.debug = true;
+    this.strengthBar = new StrengthBar();
+
+    const strengthControl = document.getElementById('strengthControl');
+
+    if ('ontouchstart' in document.documentElement){
+      strengthControl.addEventListener( 'touchstart', this.mousedown.bind(this));
+      strengthControl.addEventListener( 'touchend', this.mouseup.bind(this));
+    }else{
+      strengthControl.addEventListener( 'mousedown', this.mousedown.bind(this));
+      strengthControl.addEventListener( 'mouseup', this.mouseup.bind(this));
+      document.addEventListener( 'keydown', this.keydown.bind(this));
+      document.addEventListener( 'keyup', this.keyup.bind(this));
+    }
+
+    if (this.helper) this.helper.wireframe = true;
+
+    
+  }
+  
+  initThree(){
+    const container = document.createElement( 'div' );
+    document.body.appendChild( container );
+    
+    this.debug = false;
+    this.loadingBar = new LoadingBar();
 
      this.clock = new THREE.Clock();
      
@@ -39,7 +57,7 @@ class Game{
      
      this.createLight(Table.LENGTH/4);
      this.createLight(-Table.LENGTH/4);
-     
+
      this.renderer = new THREE.WebGLRenderer({ antialias: true } );
      this.renderer.shadowMap.enabled = true;
      this.renderer.setPixelRatio( window.devicePixelRatio );
@@ -54,7 +72,7 @@ class Game{
     }
     
   createLight(x){
-    const light = new THREE.SpotLight(0xffffe5, 2.5, 10, 0.8, 0.5, 2);
+    const light = new THREE.SpotLight(0xffffe5, 1, 10, 0.8, 0.9, 2);
 
     light.position.set( x, 1, 0);
     light.target.position.set(x,0x0);
@@ -83,7 +101,8 @@ class Game{
         
     loader.load( '../assets/living_room.hdr',  
         texture => {
-            const envMap = pmremGenerator.fromEquirectangular( texture).texture;
+            const envMap = pmremGenerator.fromEquirectangular( texture).texture
+            ;
             pmremGenerator.dispose();
             this.scene.environment = envMap;
         }, 
@@ -93,7 +112,32 @@ class Game{
 
   }
     
-    
+  keydown( evt ){
+    if (evt.keyCode == 32){
+        this.strengthBar.visible = true;
+    }
+  }
+
+  keyup( evt ){
+    if (evt.keyCode == 32){
+        this.strengthBar.visible = false;
+        this.strikeCueball()
+    }
+  }
+
+  mousedown(evt){
+    this.strengthBar.visible = true;
+  }
+
+  mouseup( evt ){
+    this.strengthBar.visible = false;
+    this.strikeCueball()
+  }
+
+  strikeCueball(){
+    if (this.cueBall.isSleeping) this.cueBall.hit(this.strengthBar.strength);
+  }
+
   initWorld() {
     this.world = new CANNON.World();
     this.world.gravity.set(0, -9.82, 0);
@@ -131,13 +175,14 @@ class Game{
   loadGLTF(){
     const loader =  new GLTFLoader().setPath("../assets/pool-table/");
 
-    loader.load('poo-table.glb',
+    loader.load(
+      'pool-table.glb',
 
     gltf => {
       this.table = gltf.scene
       this.table.position.set(-Table.LENGTH/2, 0, Table.WIDTH/2 );
       this.table.traverse( child => {
-        if(shoçd.name == 'Cue'){
+        if(child.name == 'Cue'){
           this.cue = child;
           child.visible = false
         }
@@ -148,12 +193,12 @@ class Game{
           child.material.metalness = 0.0;
           child.material.roughness = 0.3;
         }
-        if(child.oarent !== null && child.parent.name !== null && child.parent.name == 'Felt'){
-          child.material.roughness = 0.8;
+        if(child.parent !== null && child.parent.name !== null && child.parent.name == 'Felt'){
+          //child.material.roughness = 0.8;
           child.recieveShadow = true
         }
       })
-      rhis.scene.add(gltf.scene);
+      this.scene.add(gltf.scene);
 
       this.loadingBar.visible = false;
 
@@ -170,7 +215,7 @@ class Game{
 
   createBalls(){
     //white ball
-    this.balls = [new Ball(this, -Table.LENGTH/4, 0)];
+    this.balls = [new WhiteBall(this, -Table.LENGTH/4, 0) ];
     console.log(this.balls);
 
     const rowInc = 1.74 * Ball.RADIUS;
@@ -200,12 +245,15 @@ class Game{
   }
  
   render( ) {   
-    this.controls.target.copy(this.balls[0].mesh.position);
+    this.controls.target.copy(this.cueBall.mesh.position);
     this.controls.update(); 
     this.world.step(this.world.fixedTimeStep);
 
+    if (this.strengthBar.visible) this.strengthBar.update();
+    const dt = this.clock.getDelta();
+
     if(this.helper) this.helper.update();
-    this.balls.forEach(ball => ball.update());
+    this.balls.forEach(ball => ball.update(dt));
     this.renderer.render( this.scene, this.camera );
   }
  }
